@@ -1,0 +1,140 @@
+import discord
+from discord.ext import commands, tasks
+import aiohttp
+import asyncio
+import json
+import os
+
+DATA_FILE = "data.json"
+
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {}
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
+
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+data = load_data()
+
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# -----------------------------
+# Helper: Get latest review
+# -----------------------------
+async def fetch_latest_review(username):
+    url = f"https://backloggd.com/u/{username}/reviews/"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            if resp.status != 200:
+                return None
+
+            text = await resp.text()
+
+            try:
+                start = text.index('class="review-card"')
+                link_start = text.index('/u/', start)
+                link_end = text.index('"', link_start)
+                review_link = "https://backloggd.com" + text[link_start:link_end]
+
+                title_start = text.index('alt="', start) + 5
+                title_end = text.index('"', title_start)
+                game_title = text[title_start:title_end]
+
+                return {
+                    "game": game_title,
+                    "link": review_link
+                }
+            except:
+                return None
+
+# -----------------------------
+# Slash Commands
+# -----------------------------
+@bot.tree.command(name="setchannel", description="Set the channel for review updates.")
+async def setchannel(interaction: discord.Interaction):
+    guild_id = str(interaction.guild_id)
+
+    if guild_id not in data:
+        data[guild_id] = {"channel_id": None, "users": {}}
+
+    data[guild_id]["channel_id"] = interaction.channel_id
+    save_data(data)
+
+    await interaction.response.send_message("This channel is now set for Backloggd updates.")
+
+@bot.tree.command(name="adduser", description="Add a Backloggd user to track.")
+async def adduser(interaction: discord.Interaction, username: str):
+    guild_id = str(interaction.guild_id)
+
+    if guild_id not in data:
+        data[guild_id] = {"channel_id": None, "users": {}}
+
+    data[guild_id]["users"][username.lower()] = None
+    save_data(data)
+
+    await interaction.response.send_message(f"Added **{username}** to the tracking list.")
+
+@bot.tree.command(name="removeuser", description="Remove a Backloggd user.")
+async def removeuser(interaction: discord.Interaction, username: str):
+    guild_id = str(interaction.guild_id)
+
+    if guild_id in data and username.lower() in data[guild_id]["users"]:
+        del data[guild_id]["users"][username.lower()]
+        save_data(data)
+        await interaction.response.send_message(f"Removed **{username}**.")
+    else:
+        await interaction.response.send_message("That user is not being tracked.")
+
+@bot.tree.command(name="listusers", description="List all tracked Backloggd users.")
+async def listusers(interaction: discord.Interaction):
+    guild_id = str(interaction.guild_id)
+
+    if guild_id not in data or not data[guild_id]["users"]:
+        await interaction.response.send_message("No users are being tracked yet.")
+        return
+
+    users = "\n".join(f"- {u}" for u in data[guild_id]["users"].keys())
+    await interaction.response.send_message(f"Tracked users:\n{users}")
+
+# -----------------------------
+# Background Task
+# -----------------------------
+@tasks.loop(minutes=5)
+async def check_reviews():
+    for guild_id, info in data.items():
+        channel_id = info.get("channel_id")
+        if not channel_id:
+            continue
+
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            continue
+
+        for username, last_review in info["users"].items():
+            latest = await fetch_latest_review(username)
+            if not latest:
+                continue
+
+            review_id = latest["link"]
+
+            if last_review != review_id:
+                data[guild_id]["users"][username] = review_id
+                save_data(data)
+
+                await channel.send(
+                    f"**{username}** posted a new review!\n"
+                    f"**{latest['game']}**\n"
+                    f"{latest['link']}"
+                )
+
+@bot.event
+async def on_ready():
+    await bot.tree.sync()
+    check_reviews.start()
+    print(f"Logged in as {bot.user}")
+
+bot.run(os.getenv("DISCORD_TOKEN"))
