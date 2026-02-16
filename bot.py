@@ -18,8 +18,10 @@ def save_data(data):
         json.dump(data, f, indent=4)
 
 data = load_data()
-
 intents = discord.Intents.default()
+intents.guilds = True
+intents.members = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # -----------------------------
