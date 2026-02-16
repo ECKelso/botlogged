@@ -178,7 +178,7 @@ async def on_ready():
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
-            name="Your Backlogged reviwes since 2026 🤩"
+            name="Your Backlogged reviews since 2026 🤩"
         )
     )
 
