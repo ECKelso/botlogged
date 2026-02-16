@@ -105,25 +105,34 @@ async def listusers(interaction: discord.Interaction):
 # -----------------------------
 # Background Task
 # -----------------------------
-@tasks.loop(minutes=5)
+@tasks.loop(minutes=10)
 async def check_reviews():
+    print("[Loop] Checking reviews for all guilds…")
+
     for guild_id, info in data.items():
         channel_id = info.get("channel_id")
         if not channel_id:
+            print(f"[Loop] Guild {guild_id} has no channel set, skipping.")
             continue
 
         channel = bot.get_channel(channel_id)
         if not channel:
+            print(f"[Loop] Channel {channel_id} not found, skipping.")
             continue
 
         for username, last_review in info["users"].items():
+            print(f"[Loop] Checking user: {username}")
+
             latest = await fetch_latest_review(username)
             if not latest:
+                print(f"[Loop] Could not fetch review for {username}")
                 continue
 
             review_id = latest["link"]
 
             if last_review != review_id:
+                print(f"[Loop] NEW REVIEW FOUND for {username}: {review_id}")
+
                 data[guild_id]["users"][username] = review_id
                 save_data(data)
 
@@ -132,6 +141,9 @@ async def check_reviews():
                     f"**{latest['game']}**\n"
                     f"{latest['link']}"
                 )
+            else:
+                print(f"[Loop] No new review for {username}")
+
 
 @bot.event
 async def on_ready():
