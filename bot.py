@@ -173,6 +173,15 @@ async def check_reviews():
 async def on_ready():
     await bot.tree.sync()
     check_reviews.start()
+
+    # Set bot status here
+    await bot.change_presence(
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name="Your Backlogged reviwes since 2026 🤩"
+        )
+    )
+
     print(f"Logged in as {bot.user}")
 
 bot.run(os.getenv("DISCORD_TOKEN"))
