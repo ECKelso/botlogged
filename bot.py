@@ -105,7 +105,7 @@ async def listusers(interaction: discord.Interaction):
 # -----------------------------
 # Background Task
 # -----------------------------
-@tasks.loop(minutes=10)
+@tasks.loop(seconds=10)
 async def check_reviews():
     print("[Loop] Checking reviews for all guilds…")
 
