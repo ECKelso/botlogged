@@ -18,44 +18,68 @@ def save_data(data):
         json.dump(data, f, indent=4)
 
 data = load_data()
+
 intents = discord.Intents.default()
 intents.guilds = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# -----------------------------
-# Helper: Get latest review
-# -----------------------------
+# ---------------------------------------------------
+# Helper: Fetch latest review (robust + fixed version)
+# ---------------------------------------------------
 async def fetch_latest_review(username):
     url = f"https://backloggd.com/u/{username}/reviews/"
+    print(f"[Scraper] Fetching: {url}")
+
     async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            if resp.status != 200:
-                return None
+        try:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    print(f"[Scraper] HTTP {resp.status} for {username}")
+                    return None
 
-            text = await resp.text()
+                text = await resp.text()
 
-            try:
-                start = text.index('class="review-card"')
-                link_start = text.index('/u/', start)
-                link_end = text.index('"', link_start)
-                review_link = "https://backloggd.com" + text[link_start:link_end]
+                # Find the first review card
+                try:
+                    start = text.index("review-card")
+                except ValueError:
+                    print(f"[Scraper] No review-card found for {username}")
+                    return None
 
-                title_start = text.index('alt="', start) + 5
-                title_end = text.index('"', title_start)
-                game_title = text[title_start:title_end]
+                # Extract review link
+                try:
+                    link_anchor = text.index("open-review-link", start)
+                    link_start = text.index("/u/", link_anchor)
+                    link_end = text.index('"', link_start)
+                    review_link = "https://backloggd.com" + text[link_start:link_end]
+                except ValueError:
+                    print(f"[Scraper] Could not extract review link for {username}")
+                    return None
+
+                # Extract game title
+                try:
+                    img_start = text.index("card-img", start)
+                    alt_start = text.index('alt="', img_start) + 5
+                    alt_end = text.index('"', alt_start)
+                    game_title = text[alt_start:alt_end]
+                except ValueError:
+                    print(f"[Scraper] Could not extract game title for {username}")
+                    game_title = "Unknown Game"
 
                 return {
                     "game": game_title,
                     "link": review_link
                 }
-            except:
-                return None
 
-# -----------------------------
+        except Exception as e:
+            print(f"[Scraper] Exception for {username}: {e}")
+            return None
+
+# ---------------------------------------------------
 # Slash Commands
-# -----------------------------
+# ---------------------------------------------------
 @bot.tree.command(name="setchannel", description="Set the channel for review updates.")
 async def setchannel(interaction: discord.Interaction):
     guild_id = str(interaction.guild_id)
@@ -102,12 +126,13 @@ async def listusers(interaction: discord.Interaction):
     users = "\n".join(f"- {u}" for u in data[guild_id]["users"].keys())
     await interaction.response.send_message(f"Tracked users:\n{users}")
 
-# -----------------------------
+# ---------------------------------------------------
 # Background Task
-# -----------------------------
-@tasks.loop(seconds=10)
+# ---------------------------------------------------
+@tasks.loop(minutes=5)
 async def check_reviews():
     print("[Loop] Checking reviews for all guilds…")
+    print("[Debug] Current data:", data)
 
     for guild_id, info in data.items():
         channel_id = info.get("channel_id")
@@ -143,7 +168,6 @@ async def check_reviews():
                 )
             else:
                 print(f"[Loop] No new review for {username}")
-
 
 @bot.event
 async def on_ready():
