@@ -5,6 +5,18 @@ import asyncio
 import json
 import os
 
+DATA_DIR = "/data"
+DATA_FILE = f"{DATA_DIR}/data.json"
+
+# Ensure /data exists
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# Ensure data.json exists
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "w") as f:
+        f.write("{}")
+
+
 DATA_FILE = "/data/data.json"
 
 def load_data():
