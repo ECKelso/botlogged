@@ -5,7 +5,7 @@ import asyncio
 import json
 import os
 
-DATA_FILE = "data.json"
+DATA_FILE = "/data/data.json"
 
 def load_data():
     if not os.path.exists(DATA_FILE):
