@@ -16,9 +16,6 @@ if not os.path.exists(DATA_FILE):
     with open(DATA_FILE, "w") as f:
         f.write("{}")
 
-
-DATA_FILE = "/data/data.json"
-
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {}
